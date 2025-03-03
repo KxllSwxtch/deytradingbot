@@ -377,7 +377,7 @@ def calculate_cost(link, message):
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
             types.InlineKeyboardButton(
-                "Написать менеджеру", url="https://t.me/@timyo97"
+                "Написать менеджеру", url="https://wa.me/821088550386"
             )
         )
         keyboard.add(
@@ -660,7 +660,7 @@ def calculate_cost(link, message):
         )
         keyboard.add(
             types.InlineKeyboardButton(
-                "Написать менеджеру", url="https://t.me/@timyo97"
+                "Написать менеджеру", url="https://wa.me/821088550386"
             )
         )
         keyboard.add(
@@ -899,9 +899,7 @@ def handle_callback_query(call):
             f"Автовоз до Москвы:\n<b>${format_number(car_data['moscow_transporter_usd'])}</b> | <b>₩{format_number(car_data['moscow_transporter_krw'])}</b> | <b>{format_number(car_data['moscow_transporter_rub'])} ₽</b>\n\n"
             f"Итого под ключ: \n<b>${format_number(car_data['total_cost_usd'])}</b> | <b>₩{format_number(car_data['total_cost_krw'])}</b> | <b>{format_number(car_data['total_cost_rub'])} ₽</b>\n\n"
             f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
-            f"▪️ +82 10-2934-8855 (Артур)\n"
-            f"▪️ +82 10-5528-0997 (Тимур)\n"
-            f"▪️ +82 10-5128-8082 (Александр)\n\n"
+            f"▪️ +82 10-8855-0386 (Андрей)\n"
         )
 
         # Inline buttons for further actions
@@ -955,7 +953,7 @@ def handle_callback_query(call):
         )
         # keyboard.add(
         #     types.InlineKeyboardButton(
-        #         "Связаться с менеджером", url="https://t.me/@timyo97"
+        #         "Связаться с менеджером", url="https://wa.me/821088550386"
         #     )
         # )
 
@@ -999,7 +997,7 @@ def handle_callback_query(call):
             )
             keyboard.add(
                 types.InlineKeyboardButton(
-                    "Связаться с менеджером", url="https://t.me/@timyo97"
+                    "Связаться с менеджером", url="https://wa.me/821088550386"
                 )
             )
 
@@ -1035,7 +1033,7 @@ def handle_callback_query(call):
             )
             keyboard.add(
                 types.InlineKeyboardButton(
-                    "Связаться с менеджером", url="https://t.me/@timyo97"
+                    "Связаться с менеджером", url="https://wa.me/821088550386"
                 )
             )
             keyboard.add(
@@ -1249,9 +1247,7 @@ def process_car_price(message):
         f"Автовоз до Москвы:\n<b>${format_number(moscow_transporter_usd)}</b> | <b>₩{format_number(moscow_transporter_krw)}</b> | <b>{format_number(moscow_transporter_rub)} ₽</b>\n\n"
         f"Итого под ключ: \n<b>${format_number(total_cost_usd)}</b> | <b>₩{format_number(total_cost_krw)}</b> | <b>{format_number(total_cost_rub)} ₽</b>\n\n"
         f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
-        f"▪️ +82 10-2934-8855 (Артур)\n"
-        f"▪️ +82 10-5528-0997 (Тимур)\n"
-        f"▪️ +82 10-5128-8082 (Александр)\n\n"
+        f"▪️ +82 10-8855-0386 (Андрей)\n"
     )
 
     # Клавиатура с дальнейшими действиями
@@ -1263,7 +1259,7 @@ def process_car_price(message):
     )
     keyboard.add(
         types.InlineKeyboardButton(
-            "Связаться с менеджером", url="https://t.me/@timyo97"
+            "Связаться с менеджером", url="https://wa.me/821088550386"
         )
     )
     keyboard.add(types.InlineKeyboardButton("Главное меню", callback_data="main_menu"))
@@ -1319,10 +1315,7 @@ def handle_message(message):
     # Проверка на другие команды
     elif user_message == "Написать менеджеру":
         managers_list = [
-            {"name": "Ким Артур (Корея)", "whatsapp": "https://wa.me/821029348855"},
-            {"name": "Ким Артур (Россия)", "whatsapp": "https://wa.me/79999000070"},
-            {"name": "Тимур", "whatsapp": "https://wa.me/821055280997"},
-            {"name": "Александр", "whatsapp": "https://wa.me/821051288082"},
+            {"name": "Андрей (Корея)", "whatsapp": "https://wa.me/821088550386"},
         ]
 
         # Формируем сообщение со списком менеджеров
