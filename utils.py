@@ -6,6 +6,44 @@ PROXY_URL = "http://B01vby:GBno0x@45.118.250.2:8000"
 proxies = {"http": PROXY_URL, "https": PROXY_URL}
 
 
+def get_customs_fees_manual(engine_volume, car_price, car_age, engine_type=1):
+    """
+    Запрашивает расчёт таможенных платежей с сайта calcus.ru.
+    :param engine_volume: Объём двигателя (куб. см)
+    :param car_price: Цена авто в вонах
+    :param car_year: Год выпуска авто
+    :param engine_type: Тип двигателя (1 - бензин, 2 - дизель, 3 - гибрид, 4 - электромобиль)
+    :return: JSON с результатами расчёта
+    """
+    url = "https://calcus.ru/calculate/Customs"
+
+    payload = {
+        "owner": 1,  # Физлицо
+        "age": car_age,  # Возрастная категория
+        "engine": engine_type,  # Тип двигателя (по умолчанию 1 - бензин)
+        "power": 1,  # Лошадиные силы (можно оставить 1)
+        "power_unit": 1,  # Тип мощности (1 - л.с.)
+        "value": int(engine_volume),  # Объём двигателя
+        "price": int(car_price),  # Цена авто в KRW
+        "curr": "KRW",  # Валюта
+    }
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Referer": "https://calcus.ru/",
+        "Origin": "https://calcus.ru",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+
+    try:
+        response = requests.post(url, data=payload, headers=headers, proxies=proxies)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Ошибка при запросе к calcus.ru: {e}")
+        return None
+
+
 def format_number(number):
     return locale.format_string("%d", number, grouping=True)
 
