@@ -52,6 +52,16 @@ def create_tables():
             """
             )
 
+            # ✅ Таблица подписок
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    user_id BIGINT PRIMARY KEY,
+                    status BOOLEAN DEFAULT FALSE
+                );
+                """
+            )
+
             conn.commit()
 
 

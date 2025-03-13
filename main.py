@@ -7,6 +7,7 @@ import locale
 import logging
 import urllib.parse
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from database import (
     create_tables,
     get_orders,
@@ -79,8 +80,9 @@ pending_orders = {}
 user_contacts = {}
 user_names = {}
 
-MANAGERS = [728438182]
-FREE_ACCESS_USERS = {728438182}
+MANAGERS = [728438182, 627689711]
+
+FREE_ACCESS_USERS = {728438182, 627689711}
 
 ORDER_STATUSES = {
     "1": "🚗 Авто выкуплен (на базе)",
@@ -240,7 +242,7 @@ def notify_managers(order):
         f"🚨 *Новый заказ!*\n\n"
         f"🚗 [{order_title}]({order_link})\n"
         f"👤 Заказчик: {user_mention}\n"
-        f"📞 Контакт: +{phone_number}\n"
+        f"📞 Контакт: {phone_number}\n"
         f"📌 *Статус:* 🕒 Ожидает подтверждения\n"
     )
 
@@ -1257,9 +1259,21 @@ def calculate_cost(link, message):
 
     user_id = message.chat.id
 
-    # Проверяем количество расчетов
+    # Если пользователь в списке FREE_ACCESS_USERS, он получает бесконечные расчёты
+    if user_id in FREE_ACCESS_USERS:
+        user_subscription = True
+    else:
+        # Проверяем подписку в БД
+        user_subscription = check_user_subscription(user_id)
+
+        # Если в БД нет подписки – проверяем через API
+        if not user_subscription:
+            user_subscription = is_user_subscribed(user_id)
+            if user_subscription:
+                update_user_subscription(user_id, True)  # ✅ Обновляем подписку в БД
+
+    # Проверяем количество расчётов
     user_calc_count = get_calculation_count(user_id)
-    user_subscription = is_user_subscribed(user_id)
 
     if user_calc_count >= 2 and not user_subscription:
         keyboard = types.InlineKeyboardMarkup()
@@ -1302,7 +1316,7 @@ def calculate_cost(link, message):
             send_error_message(message, "🚫 Не удалось извлечь carid из ссылки.")
             return
 
-    elif "kbchachacha.com" in link:
+    elif "kbchachacha.com" in link or "m.kbchachacha.com" in link:
         parsed_url = urlparse(link)
         query_params = parse_qs(parsed_url.query)
         car_id = query_params.get("carSeq", [None])[0]
@@ -2397,7 +2411,7 @@ def handle_message(message):
 
     # Проверка на корректность ссылки
     elif re.match(
-        r"^https?://(www|fem)\.encar\.com/.*|^https?://(www\.)?kbchachacha\.com/.*|^https?://(web\.)?chutcha\.net/.*",
+        r"^https?://(www|fem)\.encar\.com/.*|^https?://(www\.)?kbchachacha\.com/.*|^https?://m\.kbchachacha\.com/.*|^https?://(web\.)?chutcha\.net/.*",
         user_message,
     ):
         calculate_cost(user_message, message)
@@ -2480,4 +2494,10 @@ if __name__ == "__main__":
     get_currency_rates()
     get_rub_to_krw_rate()
     get_usdt_to_krw_rate()
+
+    # Обновляем курс каждые 12 часов
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(get_usdt_to_krw_rate, "interval", hours=12)
+    scheduler.start()
+
     bot.polling(non_stop=True)
