@@ -1491,58 +1491,47 @@ def calculate_cost(link, message):
         # Расчет итоговой стоимости автомобиля в рублях
         total_cost = (
             price_rub
-            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((300000 / usd_to_krw_rate) * usd_to_rub_rate)
             + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + 120000
+            + 100000
             + customs_fee
             + customs_duty
             + recycling_fee
             + 13000
-            + 230000
+            + 200000
         )
 
         total_cost_krw = (
             price_krw
-            + 1400000
-            + 1400000
+            + 300000
             + 440000
-            + (120000 / usd_to_rub_rate) * usd_to_krw_rate
+            + (100000 / usd_to_rub_rate) * usd_to_krw_rate
             + (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
             + (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
             + (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
             + (13000 / usd_to_rub_rate) * usd_to_krw_rate
-            + (230000 / usd_to_rub_rate) * usd_to_krw_rate
+            + (200000 / usd_to_rub_rate) * usd_to_krw_rate
         )
 
         total_cost_usd = (
             price_usd
-            + (1400000 / usd_to_krw_rate)
-            + (1400000 / usd_to_krw_rate)
+            + (300000 / usd_to_krw_rate)
             + (440000 / usd_to_krw_rate)
-            + (120000 / usd_to_rub_rate)
+            + (100000 / usd_to_rub_rate)
             + (customs_fee / usd_to_rub_rate)
             + (customs_duty / usd_to_rub_rate)
             + (recycling_fee / usd_to_rub_rate)
             + (13000 / usd_to_rub_rate)
-            + (230000 / usd_to_rub_rate)
+            + (200000 / usd_to_rub_rate)
         )
 
         car_data["total_cost_usd"] = total_cost_usd
         car_data["total_cost_krw"] = total_cost_krw
         car_data["total_cost_rub"] = total_cost
 
-        car_data["company_fees_usd"] = 1400000 / usd_to_krw_rate
-        car_data["company_fees_krw"] = 1400000
-        car_data["company_fees_rub"] = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
-
-        car_data["agent_korea_rub"] = 50000
-        car_data["agent_korea_usd"] = 50000 / usd_to_rub_rate
-        car_data["agent_korea_krw"] = (50000 / usd_to_rub_rate) * usd_to_krw_rate
-
-        car_data["advance_rub"] = (1000000 / usd_to_krw_rate) * usd_to_rub_rate
-        car_data["advance_usd"] = 1000000 * usd_to_krw_rate
-        car_data["advance_krw"] = 1000000
+        car_data["company_fees_usd"] = 0
+        car_data["company_fees_krw"] = 0
+        car_data["company_fees_rub"] = 0
 
         car_data["car_price_krw"] = price_krw
         car_data["car_price_usd"] = price_usd
