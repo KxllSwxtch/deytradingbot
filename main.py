@@ -551,7 +551,7 @@ def show_orders(message):
             # f"📦 *Заказ #{idx}*\n"
             f"🚗 *{car_title}* (ID: {car_id})\n\n"
             f"👤 Заказчик: {user_mention}\n"
-            f"📞 Телефон: *+{phone_number}*\n\n"
+            f"📞 Телефон: *{phone_number}*\n\n"
             f"📌 *Статус:* {car_status}\n\n"
             f"[🔗 Ссылка на автомобиль]({car_link})"
         )
