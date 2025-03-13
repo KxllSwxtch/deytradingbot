@@ -1560,9 +1560,9 @@ def calculate_cost(link, message):
         car_data["transfer_korea_krw"] = 350000
         car_data["transfer_korea_rub"] = (350000 / usd_to_krw_rate) * usd_to_rub_rate
 
-        car_data["freight_korea_usd"] = 1400000 / usd_to_krw_rate
-        car_data["freight_korea_krw"] = 1400000
-        car_data["freight_korea_rub"] = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+        car_data["freight_korea_usd"] = 300000 / usd_to_krw_rate
+        car_data["freight_korea_krw"] = 300000
+        car_data["freight_korea_rub"] = (300000 / usd_to_krw_rate) * usd_to_rub_rate
 
         car_data["korea_total_usd"] = (
             (50000 / usd_to_rub_rate)
@@ -1986,7 +1986,7 @@ def handle_callback_query(call):
         detail_message = (
             f"<i>ПЕРВАЯ ЧАСТЬ ОПЛАТЫ (КОРЕЯ)</i>:\n\n"
             f"Стоимость автомобиля:\n<b>${format_number(car_data['car_price_usd'])}</b> | <b>₩{format_number(car_data['car_price_krw'])}</b> | <b>{format_number(car_data['car_price_rub'])} ₽</b>\n\n"
-            f"Услуги фирмы (поиск и подбор авто, документация, 3 осмотра):\n<b>${format_number(car_data['company_fees_usd'])}</b> | <b>₩{format_number(car_data['company_fees_krw'])}</b> | <b>{format_number(car_data['company_fees_rub'])} ₽</b>\n\n"
+            f"Услуги фирмы (поиск и подбор авто, документация, 2 осмотра):\n<b>$0</b> | <b>₩0</b> | <b>0 ₽</b>\n\n"
             f"Доставка до порта г. Пусан:\n<b>${format_number(car_data['freight_korea_usd'])}</b> | <b>₩{format_number(car_data['freight_korea_krw'])}</b> | <b>{format_number(car_data['freight_korea_rub'])} ₽</b>\n\n\n"
             f"Диллерский сбор:\n<b>${format_number(car_data['dealer_korea_usd'])}</b> | <b>₩{format_number(car_data['dealer_korea_krw'])}</b> | <b>{format_number(car_data['dealer_korea_rub'])} ₽</b>\n\n"
             f"<i>ВТОРАЯ ЧАСТЬ ОПЛАТЫ (РОССИЯ)</i>:\n\n"
