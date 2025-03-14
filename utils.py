@@ -36,7 +36,7 @@ def get_customs_fees_manual(engine_volume, car_price, car_age, engine_type=1):
     }
 
     try:
-        response = requests.post(url, data=payload, headers=headers, proxies=proxies)
+        response = requests.post(url, data=payload, headers=headers)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
