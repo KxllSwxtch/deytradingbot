@@ -568,6 +568,11 @@ def show_orders(message):
                 callback_data=f"delete_order_{order_id}",
             ),
         )
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "Вернуться в главное меню ", callback_data="main_menu"
+            )
+        )
 
         bot.send_message(
             manager_id,
