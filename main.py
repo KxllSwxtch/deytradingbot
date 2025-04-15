@@ -1324,7 +1324,21 @@ def calculate_cost(link, message):
     elif "kbchachacha.com" in link or "m.kbchachacha.com" in link:
         parsed_url = urlparse(link)
         query_params = parse_qs(parsed_url.query)
+
+        # Попытка 1: обычный carSeq в параметрах
         car_id = query_params.get("carSeq", [None])[0]
+
+        # Попытка 2: если есть параметр `c=...`, надо выполнить редирект
+        if not car_id and query_params.get("c"):
+            try:
+                response = requests.get(link, allow_redirects=True, timeout=5)
+                redirected_url = response.url
+                redirected_query = parse_qs(urlparse(redirected_url).query)
+                car_id = redirected_query.get("carSeq", [None])[0]
+            except Exception as e:
+                print(f"Ошибка при обработке редиректа KBChaCha: {e}")
+                send_error_message(message, "🚫 Ошибка при обработке ссылки KBChaCha.")
+                return
 
         if car_id:
             car_id_external = car_id
