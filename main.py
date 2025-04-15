@@ -1494,6 +1494,11 @@ def calculate_cost(link, message):
         price_usd = price_krw / usd_to_krw_rate
         price_rub = price_usd * usd_to_rub_rate
 
+        print(car_engine_displacement)
+        print(price_krw)
+        print(int(formatted_car_year))
+        print(car_month)
+
         response = get_customs_fees(
             car_engine_displacement,
             price_krw,
