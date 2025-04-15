@@ -1123,6 +1123,26 @@ def get_car_info(url):
             else:
                 print("❌ Таблица информации не найдена")
 
+            # Если объем двигателя не найден или равен 0, пытаемся извлечь из названия
+            if not car_engine_displacement or car_engine_displacement == "0cc":
+                # Ищем числа с точкой (например, 2.0) в названии автомобиля
+                engine_match = re.search(r"(\d+\.\d+)", car_name)
+                if engine_match:
+                    # Преобразуем, например, 2.0 в 2000cc
+                    engine_size = float(engine_match.group(1))
+                    car_engine_displacement = f"{int(engine_size * 1000)}cc"
+                    print(
+                        f"✅ Извлечен объем двигателя из названия: {car_engine_displacement}"
+                    )
+                else:
+                    # Ищем просто числа (например, 2000) в названии
+                    engine_match = re.search(r"(\d{3,4})", car_name)
+                    if engine_match and 500 <= int(engine_match.group(1)) <= 9000:
+                        car_engine_displacement = f"{engine_match.group(1)}cc"
+                        print(
+                            f"✅ Извлечен объем двигателя из названия: {car_engine_displacement}"
+                        )
+
             car_info = {
                 "name": car_name,
                 "car_price": car_price,
