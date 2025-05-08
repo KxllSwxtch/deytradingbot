@@ -24,6 +24,9 @@ from database import (
     check_user_subscription,
     update_user_subscription,
     get_all_users,
+    add_or_update_user,
+    user_exists,
+    get_all_bot_users,
 )
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -594,7 +597,7 @@ def show_stats(message):
         return
 
     # Получаем список всех пользователей
-    users = get_all_users()
+    users = get_all_bot_users()
 
     if not users:
         bot.send_message(admin_id, "📊 Статистика: пользователей не найдено.")
@@ -604,24 +607,25 @@ def show_stats(message):
 
     for idx, user in enumerate(users, start=1):
         user_id = user.get("user_id")
-        user_name = user.get("user_name", "")
+        username = user.get("username", "")
+        first_name = user.get("first_name", "")
+        last_name = user.get("last_name", "")
 
-        if not user_name:
+        # Формируем имя пользователя
+        if first_name and last_name:
+            user_name = f"{first_name} {last_name}"
+        elif first_name:
+            user_name = first_name
+        elif username:
+            user_name = username
+        else:
             user_name = f"User {user_id}"
 
-        username = ""
-
-        # Пробуем получить информацию о пользователе через API Telegram
-        try:
-            chat = bot.get_chat(user_id)
-            if chat.username:
-                username = f"(@{chat.username})"
-        except Exception:
-            # Если не удалось получить информацию, оставляем пустым
-            pass
+        # Форматируем username
+        username_display = f"(@{username})" if username else ""
 
         # Форматируем дату первой активности
-        first_activity = user.get("first_activity")
+        first_activity = user.get("created_at")
         if first_activity:
             try:
                 # Если first_activity - строка, преобразуем в datetime
@@ -642,8 +646,8 @@ def show_stats(message):
             activity_date = "Неизвестно"
 
         # Добавляем информацию о пользователе в сообщение
-        user_info = f"👤 {idx}. {user_name} {username}"
-        if username == "":
+        user_info = f"👤 {idx}. {user_name} {username_display}"
+        if username_display == "":
             user_info = f"👤 {idx}. {user_name}"
 
         stats_message += f"{user_info} — {activity_date}\n"
@@ -1044,6 +1048,17 @@ def send_welcome(message):
     get_currency_rates()
 
     user_first_name = message.from_user.first_name
+
+    # Добавляем пользователя в базу данных
+    user_data = {
+        "user_id": message.from_user.id,
+        "username": message.from_user.username,
+        "first_name": message.from_user.first_name,
+        "last_name": message.from_user.last_name,
+        "phone_number": user_contacts.get(message.from_user.id, None),
+    }
+    add_or_update_user(user_data)
+
     welcome_message = (
         f"Здравствуйте, {user_first_name}!\n\n"
         "Я бот компании DeyTrading. Я помогу вам рассчитать стоимость понравившегося вам автомобиля из Южной Кореи до стран СНГ.\n\n"
@@ -1370,6 +1385,16 @@ def calculate_cost(link, message):
     global car_data, car_id_external, car_month, car_year, krw_rub_rate, eur_rub_rate, rub_to_krw_rate, usd_rate, usdt_to_krw_rate
 
     user_id = message.chat.id
+
+    # Добавляем пользователя в базу данных
+    user_data = {
+        "user_id": message.from_user.id,
+        "username": message.from_user.username,
+        "first_name": message.from_user.first_name,
+        "last_name": message.from_user.last_name,
+        "phone_number": user_contacts.get(message.from_user.id, None),
+    }
+    add_or_update_user(user_data)
 
     # Если пользователь в списке FREE_ACCESS_USERS, он получает бесконечные расчёты
     if user_id in FREE_ACCESS_USERS:
@@ -2347,6 +2372,16 @@ def process_car_price(message):
 
     user_input = message.text.strip()
 
+    # Добавляем пользователя в базу данных
+    user_data = {
+        "user_id": message.from_user.id,
+        "username": message.from_user.username,
+        "first_name": message.from_user.first_name,
+        "last_name": message.from_user.last_name,
+        "phone_number": user_contacts.get(message.from_user.id, None),
+    }
+    add_or_update_user(user_data)
+
     # Проверяем, что введено число
     if not user_input.isdigit():
         bot.send_message(
@@ -2636,6 +2671,16 @@ def process_car_price(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_message = message.text.strip()
+
+    # Добавляем пользователя в базу данных при каждом взаимодействии
+    user_data = {
+        "user_id": message.from_user.id,
+        "username": message.from_user.username,
+        "first_name": message.from_user.first_name,
+        "last_name": message.from_user.last_name,
+        "phone_number": user_contacts.get(message.from_user.id, None),
+    }
+    add_or_update_user(user_data)
 
     # Проверяем нажатие кнопки "Рассчитать автомобиль"
     if user_message == CALCULATE_CAR_TEXT:

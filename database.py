@@ -16,6 +16,21 @@ def create_tables():
     """Создаём таблицу заказов, если её нет."""
     with connect_db() as conn:
         with conn.cursor() as cur:
+            # Таблица пользователей
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id BIGINT PRIMARY KEY,
+                    username TEXT,
+                    first_name TEXT,
+                    last_name TEXT,
+                    phone_number TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+            )
+
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS orders (
@@ -295,6 +310,58 @@ def get_all_users():
                        (SELECT created_at FROM orders o WHERE o.user_id = orders.user_id ORDER BY id ASC LIMIT 1) as first_activity
                 FROM orders
                 ORDER BY user_id, id ASC
+                """
+            )
+            users = cur.fetchall()
+    return users
+
+
+def user_exists(user_id):
+    """Проверяет, существует ли пользователь в базе данных"""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM users WHERE user_id = %s", (user_id,))
+            return cur.fetchone() is not None
+
+
+def add_or_update_user(user_data):
+    """Добавляет нового пользователя или обновляет существующего"""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            # Проверяем, есть ли уже пользователь с таким user_id
+            cur.execute(
+                """
+                INSERT INTO users (user_id, username, first_name, last_name, phone_number)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (user_id) 
+                DO UPDATE SET 
+                    username = EXCLUDED.username,
+                    first_name = EXCLUDED.first_name,
+                    last_name = EXCLUDED.last_name,
+                    last_activity = CURRENT_TIMESTAMP
+                """,
+                (
+                    user_data["user_id"],
+                    user_data.get("username", None),
+                    user_data.get("first_name", None),
+                    user_data.get("last_name", None),
+                    user_data.get("phone_number", None),
+                ),
+            )
+            conn.commit()
+
+
+def get_all_bot_users():
+    """Получает список всех пользователей бота из таблицы users"""
+    with connect_db() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT user_id, username, first_name, last_name, phone_number, created_at, last_activity,
+                       (SELECT count FROM calculations WHERE calculations.user_id = users.user_id) as calc_count,
+                       (SELECT status FROM subscriptions WHERE subscriptions.user_id = users.user_id) as subscription
+                FROM users
+                ORDER BY created_at DESC
                 """
             )
             users = cur.fetchall()
