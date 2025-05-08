@@ -22,6 +22,7 @@ from database import (
     increment_calculation_count,
     check_user_subscription,
     update_user_subscription,
+    get_all_users,
 )
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -582,6 +583,65 @@ def show_orders(message):
         )
 
 
+@bot.message_handler(commands=["stats"])
+def show_stats(message):
+    admin_id = message.chat.id
+
+    # Проверяем, является ли пользователь администратором
+    if admin_id not in MANAGERS:
+        bot.send_message(admin_id, "❌ У вас нет доступа к статистике.")
+        return
+
+    # Получаем список всех пользователей
+    users = get_all_users()
+
+    if not users:
+        bot.send_message(admin_id, "📊 Статистика: пользователей не найдено.")
+        return
+
+    stats_message = "📊 *Статистика пользователей бота*\n\n"
+
+    for idx, user in enumerate(users, start=1):
+        user_id = user.get("user_id")
+        user_name = user.get("user_name", "Не указано")
+        phone = user.get("phone_number", "Не указан")
+        calc_count = user.get("calc_count", 0) or 0
+        subscription = "✅ Есть" if user.get("subscription") else "❌ Нет"
+
+        user_mention = (
+            f"[{user_name}](tg://user?id={user_id})"
+            if user_name != "Не указано"
+            else f"ID: {user_id}"
+        )
+
+        stats_message += (
+            f"{idx}. {user_mention}\n"
+            f"   📱 Телефон: {phone}\n"
+            f"   🧮 Расчётов: {calc_count}\n"
+            f"   📝 Подписка: {subscription}\n\n"
+        )
+
+        # Telegram ограничивает длину сообщения до 4096 символов
+        # Если сообщение становится слишком длинным, отправляем его и начинаем новое
+        if len(stats_message) > 3500:
+            bot.send_message(admin_id, stats_message, parse_mode="Markdown")
+            stats_message = "📊 *Продолжение списка пользователей*\n\n"
+
+    # Отправляем оставшуюся часть сообщения
+    if stats_message:
+        bot.send_message(admin_id, stats_message, parse_mode="Markdown")
+
+    # Отправляем общую статистику
+    total_stats = (
+        f"📈 *Общая статистика*\n\n"
+        f"👥 Всего пользователей: {len(users)}\n"
+        f"🔢 Всего расчётов: {sum(user.get('calc_count', 0) or 0 for user in users)}\n"
+        f"📝 С подпиской: {sum(1 for user in users if user.get('subscription'))}"
+    )
+
+    bot.send_message(admin_id, total_stats, parse_mode="Markdown")
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("update_status_"))
 def update_order_status(call):
     manager_id = call.message.chat.id
@@ -802,6 +862,7 @@ def set_bot_commands():
         commands.extend(
             [
                 types.BotCommand("orders", "Просмотр всех заказов (для менеджеров)"),
+                types.BotCommand("stats", "Статистика пользователей"),
             ]
         )
 

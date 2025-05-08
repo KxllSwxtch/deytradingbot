@@ -256,7 +256,7 @@ def update_user_subscription(user_id, status):
 
 
 def check_user_subscription(user_id):
-    """Проверяет, подписан ли пользователь."""
+    """Проверяет, есть ли у пользователя активная подписка."""
     with connect_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -264,3 +264,20 @@ def check_user_subscription(user_id):
             )
             result = cur.fetchone()
             return result["status"] if result else False
+
+
+def get_all_users():
+    """Получает список всех уникальных пользователей бота из базы данных"""
+    with connect_db() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT user_id, user_name, phone_number, 
+                       (SELECT count FROM calculations WHERE calculations.user_id = orders.user_id) as calc_count,
+                       (SELECT status FROM subscriptions WHERE subscriptions.user_id = orders.user_id) as subscription
+                FROM orders
+                ORDER BY user_id
+                """
+            )
+            users = cur.fetchall()
+    return users
