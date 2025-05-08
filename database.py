@@ -37,9 +37,26 @@ def create_tables():
                     status TEXT DEFAULT '🔄 Не заказано',
                     total_cost_usd FLOAT,
                     total_cost_krw FLOAT,
-                    total_cost_rub FLOAT
+                    total_cost_rub FLOAT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """
+            )
+
+            # Добавляем поле created_at для существующей таблицы, если его еще нет
+            cur.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 
+                        FROM information_schema.columns 
+                        WHERE table_name='orders' AND column_name='created_at'
+                    ) THEN
+                        ALTER TABLE orders ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                    END IF;
+                END$$;
+                """
             )
 
             # ✅ Добавляем таблицу расчётов
@@ -272,11 +289,12 @@ def get_all_users():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT DISTINCT user_id, user_name, phone_number, 
+                SELECT DISTINCT ON (user_id) user_id, user_name, phone_number, 
                        (SELECT count FROM calculations WHERE calculations.user_id = orders.user_id) as calc_count,
-                       (SELECT status FROM subscriptions WHERE subscriptions.user_id = orders.user_id) as subscription
+                       (SELECT status FROM subscriptions WHERE subscriptions.user_id = orders.user_id) as subscription,
+                       (SELECT created_at FROM orders o WHERE o.user_id = orders.user_id ORDER BY id ASC LIMIT 1) as first_activity
                 FROM orders
-                ORDER BY user_id
+                ORDER BY user_id, id ASC
                 """
             )
             users = cur.fetchall()

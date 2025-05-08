@@ -6,6 +6,7 @@ import requests
 import locale
 import logging
 import urllib.parse
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import (
@@ -599,37 +600,62 @@ def show_stats(message):
         bot.send_message(admin_id, "📊 Статистика: пользователей не найдено.")
         return
 
-    stats_message = "📊 *Статистика пользователей бота*\n\n"
+    stats_message = "📊 Статистика пользователей:\n\n"
 
     for idx, user in enumerate(users, start=1):
         user_id = user.get("user_id")
-        user_name = user.get("user_name", "Не указано")
-        phone = user.get("phone_number", "Не указан")
-        calc_count = user.get("calc_count", 0) or 0
-        subscription = "✅ Есть" if user.get("subscription") else "❌ Нет"
+        user_name = user.get("user_name", "")
 
-        user_mention = (
-            f"[{user_name}](tg://user?id={user_id})"
-            if user_name != "Не указано"
-            else f"ID: {user_id}"
-        )
+        if not user_name:
+            user_name = f"User {user_id}"
 
-        stats_message += (
-            f"{idx}. {user_mention}\n"
-            f"   📱 Телефон: {phone}\n"
-            f"   🧮 Расчётов: {calc_count}\n"
-            f"   📝 Подписка: {subscription}\n\n"
-        )
+        username = ""
 
-        # Telegram ограничивает длину сообщения до 4096 символов
+        # Пробуем получить информацию о пользователе через API Telegram
+        try:
+            chat = bot.get_chat(user_id)
+            if chat.username:
+                username = f"(@{chat.username})"
+        except Exception:
+            # Если не удалось получить информацию, оставляем пустым
+            pass
+
+        # Форматируем дату первой активности
+        first_activity = user.get("first_activity")
+        if first_activity:
+            try:
+                # Если first_activity - строка, преобразуем в datetime
+                if isinstance(first_activity, str):
+                    first_activity = datetime.strptime(
+                        first_activity, "%Y-%m-%d %H:%M:%S"
+                    )
+                # Форматируем дату
+                activity_date = first_activity.strftime("%Y-%m-%d")
+            except (ValueError, AttributeError):
+                # Если возникла ошибка при форматировании, используем как есть
+                if isinstance(first_activity, str):
+                    parts = first_activity.split(" ")
+                    activity_date = parts[0] if parts else "Неизвестно"
+                else:
+                    activity_date = str(first_activity)
+        else:
+            activity_date = "Неизвестно"
+
+        # Добавляем информацию о пользователе в сообщение
+        user_info = f"👤 {idx}. {user_name} {username}"
+        if username == "":
+            user_info = f"👤 {idx}. {user_name}"
+
+        stats_message += f"{user_info} — {activity_date}\n"
+
         # Если сообщение становится слишком длинным, отправляем его и начинаем новое
         if len(stats_message) > 3500:
-            bot.send_message(admin_id, stats_message, parse_mode="Markdown")
-            stats_message = "📊 *Продолжение списка пользователей*\n\n"
+            bot.send_message(admin_id, stats_message)
+            stats_message = ""
 
     # Отправляем оставшуюся часть сообщения
     if stats_message:
-        bot.send_message(admin_id, stats_message, parse_mode="Markdown")
+        bot.send_message(admin_id, stats_message)
 
     # Отправляем общую статистику
     total_stats = (
