@@ -2321,6 +2321,7 @@ def handle_callback_query(call):
 
 def process_car_age(message):
     user_input = message.text.strip()
+    user_id = message.chat.id
 
     # Проверяем ввод
     age_mapping = {
@@ -2334,8 +2335,12 @@ def process_car_age(message):
         bot.send_message(message.chat.id, "Пожалуйста, выберите возраст из списка.")
         return
 
+    # Инициализируем словарь для пользователя, если его нет
+    if user_id not in user_data:
+        user_data[user_id] = {}
+
     # Сохраняем возраст авто
-    user_data[message.chat.id] = {"car_age": age_mapping[user_input]}
+    user_data[user_id]["car_age"] = age_mapping[user_input]
 
     # Запрашиваем объем двигателя
     bot.send_message(
