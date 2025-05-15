@@ -2371,16 +2371,17 @@ def process_car_price(message):
     global usd_to_krw_rate, usd_to_rub_rate
 
     user_input = message.text.strip()
+    user_id = message.chat.id
 
     # Добавляем пользователя в базу данных
-    user_data = {
+    user_data_db = {
         "user_id": message.from_user.id,
         "username": message.from_user.username,
         "first_name": message.from_user.first_name,
         "last_name": message.from_user.last_name,
         "phone_number": user_contacts.get(message.from_user.id, None),
     }
-    add_or_update_user(user_data)
+    add_or_update_user(user_data_db)
 
     # Проверяем, что введено число
     if not user_input.isdigit():
@@ -2391,20 +2392,28 @@ def process_car_price(message):
         bot.register_next_step_handler(message, process_car_price)
         return
 
+    # Инициализируем словарь для пользователя, если его нет
+    if user_id not in user_data:
+        user_data[user_id] = {}
+
+    # Проверяем, есть ли нужные ключи
+    if "car_age" not in user_data[user_id] or "engine_volume" not in user_data[user_id]:
+        bot.send_message(
+            message.chat.id,
+            "Произошла ошибка. Пожалуйста, начните расчёт заново, выбрав 'Ручной расчёт' из меню.",
+        )
+        return
+
     # Сохраняем стоимость автомобиля
-    user_data[message.chat.id]["car_price_krw"] = int(user_input)
+    user_data[user_id]["car_price_krw"] = int(user_input)
 
     # Извлекаем данные пользователя
     if message.chat.id not in user_data:
         user_data[message.chat.id] = {}
 
-    if "car_age" not in user_data[message.chat.id]:
-        bot.send_message(message.chat.id, "Произошла ошибка, попробуйте снова.")
-        return  # Прерываем выполнение, если возраст не установлен
-
-    age_group = user_data[message.chat.id]["car_age"]
-    engine_volume = user_data[message.chat.id]["engine_volume"]
-    car_price_krw = user_data[message.chat.id]["car_price_krw"]
+    age_group = user_data[user_id]["car_age"]
+    engine_volume = user_data[user_id]["engine_volume"]
+    car_price_krw = user_data[user_id]["car_price_krw"]
 
     # Конвертируем стоимость автомобиля в USD и RUB
     price_krw = int(car_price_krw)
