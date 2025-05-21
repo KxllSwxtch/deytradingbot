@@ -1066,12 +1066,12 @@ def send_welcome(message):
     )
 
     # Логотип компании
-    logo_url = "https://res.cloudinary.com/pomegranitedesign/image/upload/v1740976419/deytrading/logo.png"
+    logo_path = "assets/logo.png"
 
-    # Отправляем логотип перед сообщением
-    bot.send_photo(
+    with open(logo_path, "rb") as logo_file:
+        bot.send_photo(
         message.chat.id,
-        photo=logo_url,
+        photo=types.InputFile(logo_file),
     )
 
     # Отправляем приветственное сообщение
