@@ -959,16 +959,30 @@ def get_rub_to_krw_rate():
     url = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/rub.json"
 
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()  # Проверяем, что запрос успешный (код 200)
         data = response.json()
 
         rub_to_krw = data["rub"]["krw"]  # Достаем курс рубля к воне
         rub_to_krw_rate = rub_to_krw
 
+        print(f"Курс RUB → KRW: {rub_to_krw_rate}")
+
+    except requests.exceptions.Timeout:
+        logging.error("Timeout while fetching RUB to KRW rate")
+        rub_to_krw_rate = 14.0  # Fallback rate
     except requests.RequestException as e:
-        print(f"Ошибка при получении курса: {e}")
-        return None
+        logging.error(f"Ошибка при получении курса RUB → KRW: {e}")
+        rub_to_krw_rate = 14.0
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error for RUB to KRW rate: {e}")
+        rub_to_krw_rate = 14.0
+    except (KeyError, TypeError, ValueError) as e:
+        logging.error(f"Error parsing RUB to KRW rate data: {e}")
+        rub_to_krw_rate = 14.0
+    except Exception as e:
+        logging.error(f"Unexpected error in get_rub_to_krw_rate: {e}")
+        rub_to_krw_rate = 14.0
 
 
 def get_currency_rates():

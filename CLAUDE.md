@@ -856,10 +856,11 @@ The bot was crashing with `requests.exceptions.JSONDecodeError: Expecting value:
 1. `get_car_info()` (line ~1115) - Encar API car data fetching
 2. `is_user_subscribed()` (line ~865) - Telegram subscription check
 3. `get_usdt_to_krw_rate()` (line ~920) - Coinbase currency API
-4. `get_usd_to_krw_rate()` (line ~994) - Manana currency API
-5. `get_usd_to_rub_rate()` (line ~1026) - Mosca currency API
-6. `get_insurance_total()` (line ~2153) - Encar insurance data
-7. `get_technical_card()` (line ~2206) - Encar technical report
+4. `get_rub_to_krw_rate()` (line ~956) - Currency API for RUB→KRW ⚠️ **Critical startup fix**
+5. `get_usd_to_krw_rate()` (line ~994) - Manana currency API
+6. `get_usd_to_rub_rate()` (line ~1026) - Mosca currency API
+7. `get_insurance_total()` (line ~2153) - Encar insurance data
+8. `get_technical_card()` (line ~2206) - Encar technical report
 
 **Error Handling Pattern:**
 ```python
@@ -889,12 +890,20 @@ except (KeyError, TypeError) as e:
 ```
 
 **Key Improvements:**
-- All HTTP requests now have 10-second timeouts
-- Status codes checked before parsing JSON
-- Specific error types caught and logged separately
-- Fallback values provided for currency rates
-- User-friendly error messages shown to users
-- Bot no longer crashes when APIs fail
+- ✅ All HTTP requests now have 10-second timeouts
+- ✅ Status codes checked before parsing JSON
+- ✅ Specific error types caught and logged separately
+- ✅ Fallback values provided for currency rates
+- ✅ User-friendly error messages shown to users
+- ✅ Bot no longer crashes when APIs fail
+- ✅ **Fixed critical startup issue**: `get_rub_to_krw_rate()` now sets fallback value instead of returning None
+
+### Fallback Currency Rates
+When external currency APIs fail, the bot uses these fallback rates to ensure it can still start:
+- **USDT → KRW**: 1350.0
+- **USD → KRW**: 1340.0
+- **USD → RUB**: 95.0
+- **RUB → KRW**: 14.0 (new)
 
 ---
 
