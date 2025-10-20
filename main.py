@@ -862,12 +862,29 @@ def check_subscription(call):
 def is_user_subscribed(user_id):
     """Проверяет, подписан ли пользователь на канал."""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember?chat_id={CHANNEL_USERNAME}&user_id={user_id}"
-    response = requests.get(url).json()
-    return response.get("ok") and response.get("result", {}).get("status") in [
-        "member",
-        "administrator",
-        "creator",
-    ]
+
+    try:
+        http_response = requests.get(url, timeout=5)
+        http_response.raise_for_status()
+        response = http_response.json()
+
+        return response.get("ok") and response.get("result", {}).get("status") in [
+            "member",
+            "administrator",
+            "creator",
+        ]
+    except requests.exceptions.Timeout:
+        logging.error(f"Timeout checking subscription for user {user_id}")
+        return False
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request error checking subscription: {e}")
+        return False
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error checking subscription: {e}")
+        return False
+    except Exception as e:
+        logging.error(f"Unexpected error in is_user_subscribed: {e}")
+        return False
 
 
 def print_message(message):
@@ -904,16 +921,36 @@ def get_usdt_to_krw_rate():
 
     # URL для получения курса USDT к KRW
     url = "https://api.coinbase.com/v2/exchange-rates?currency=USDT"
-    response = requests.get(url)
-    data = response.json()
 
-    # Извлечение курса KRW
-    krw_rate = data["data"]["rates"]["KRW"]
-    usdt_to_krw_rate = float(krw_rate)
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
 
-    print(f"Курс USDT к KRW -> {str(usdt_to_krw_rate)}")
+        # Извлечение курса KRW
+        krw_rate = data["data"]["rates"]["KRW"]
+        usdt_to_krw_rate = float(krw_rate)
 
-    return float(krw_rate) + 8
+        print(f"Курс USDT к KRW -> {str(usdt_to_krw_rate)}")
+
+        return float(krw_rate) + 8
+
+    except requests.exceptions.Timeout:
+        logging.error("Timeout while fetching USDT to KRW rate from Coinbase")
+        # Return default rate if API fails
+        return 1350.0  # Approximate fallback rate
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request error fetching USDT rate: {e}")
+        return 1350.0
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error for Coinbase API: {e}")
+        return 1350.0
+    except (KeyError, ValueError, TypeError) as e:
+        logging.error(f"Error parsing USDT rate data: {e}")
+        return 1350.0
+    except Exception as e:
+        logging.error(f"Unexpected error in get_usdt_to_krw_rate: {e}")
+        return 1350.0
 
 
 def get_rub_to_krw_rate():
@@ -960,7 +997,7 @@ def get_usd_to_krw_rate():
     url = "https://api.manana.kr/exchange/rate/KRW/USD.json"
 
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()  # Проверяем успешность запроса
         data = response.json()
 
@@ -969,9 +1006,21 @@ def get_usd_to_krw_rate():
         usd_to_krw_rate = usd_to_krw
 
         print(f"Курс USD → KRW (с учетом +25 KRW): {usd_to_krw_rate}")
+    except requests.exceptions.Timeout:
+        logging.error("Timeout while fetching USD to KRW rate")
+        usd_to_krw_rate = 1340.0  # Fallback rate
     except requests.RequestException as e:
-        print(f"Ошибка при получении курса USD → KRW: {e}")
-        usd_to_krw_rate = None
+        logging.error(f"Ошибка при получении курса USD → KRW: {e}")
+        usd_to_krw_rate = 1340.0
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error for USD to KRW rate: {e}")
+        usd_to_krw_rate = 1340.0
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        logging.error(f"Error parsing USD to KRW rate data: {e}")
+        usd_to_krw_rate = 1340.0
+    except Exception as e:
+        logging.error(f"Unexpected error in get_usd_to_krw_rate: {e}")
+        usd_to_krw_rate = 1340.0
 
 
 def get_usd_to_rub_rate():
@@ -983,7 +1032,7 @@ def get_usd_to_rub_rate():
     }
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()  # Проверяем успешность запроса
         data = response.json()
 
@@ -992,9 +1041,21 @@ def get_usd_to_rub_rate():
         usd_to_rub_rate = usd_to_rub
 
         print(f"Курс USD → RUB: {usd_to_rub_rate}")
+    except requests.exceptions.Timeout:
+        logging.error("Timeout while fetching USD to RUB rate")
+        usd_to_rub_rate = 95.0  # Fallback rate
     except requests.RequestException as e:
-        print(f"Ошибка при получении курса USD → RUB: {e}")
-        usd_to_rub_rate = None
+        logging.error(f"Ошибка при получении курса USD → RUB: {e}")
+        usd_to_rub_rate = 95.0
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error for USD to RUB rate: {e}")
+        usd_to_rub_rate = 95.0
+    except (KeyError, TypeError, ValueError) as e:
+        logging.error(f"Error parsing USD to RUB rate data: {e}")
+        usd_to_rub_rate = 95.0
+    except Exception as e:
+        logging.error(f"Unexpected error in get_usd_to_rub_rate: {e}")
+        usd_to_rub_rate = 95.0
 
 
 # Обработчик команды /cbr
@@ -1108,67 +1169,107 @@ def get_car_info(url):
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             "Referer": "http://www.encar.com/",
+            "Accept": "application/json",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             "Cache-Control": "max-age=0",
             "Connection": "keep-alive",
         }
 
-        response = requests.get(url, headers=headers).json()
+        try:
+            # Make HTTP request with timeout
+            http_response = requests.get(url, headers=headers, timeout=10)
 
-        # Информация об автомобиле
-        car_make = response["category"]["manufacturerEnglishName"]  # Марка
-        car_model = response["category"]["modelGroupEnglishName"]  # Модель
-        car_trim = response["category"]["gradeDetailEnglishName"] or ""  # Комплектация
+            # Log response status and content for debugging
+            logging.info(f"Encar API Response Status: {http_response.status_code}")
 
-        car_title = f"{car_make} {car_model} {car_trim}"  # Заголовок
+            # Check if request was successful
+            if http_response.status_code != 200:
+                logging.error(f"Encar API returned status code {http_response.status_code}")
+                logging.error(f"Response content: {http_response.text[:500]}")
+                return None
 
-        # Получаем все необходимые данные по автомобилю
-        car_price = str(response["advertisement"]["price"])
-        car_date = response["category"]["yearMonth"]
-        year = car_date[2:4]
-        month = car_date[4:]
-        car_year = year
-        car_month = month
+            # Try to parse JSON
+            response = http_response.json()
 
-        # Пробег (форматирование)
-        mileage = response["spec"]["mileage"]
-        formatted_mileage = f"{mileage:,} км"
+        except requests.exceptions.Timeout:
+            logging.error(f"Timeout while requesting Encar API for car_id: {car_id}")
+            return None
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Request error while fetching Encar data: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON decode error for Encar API. Response was: {http_response.text[:500]}")
+            logging.error(f"Error details: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error in get_car_info (Encar): {e}")
+            return None
 
-        # Тип КПП
-        transmission = response["spec"]["transmissionName"]
-        formatted_transmission = "Автомат" if "오토" in transmission else "Механика"
+        # Validate response structure
+        try:
+            # Информация об автомобиле
+            car_make = response["category"]["manufacturerEnglishName"]  # Марка
+            car_model = response["category"]["modelGroupEnglishName"]  # Модель
+            car_trim = response["category"]["gradeDetailEnglishName"] or ""  # Комплектация
+        except (KeyError, TypeError) as e:
+            logging.error(f"Invalid response structure from Encar API: {e}")
+            logging.error(f"Response keys: {response.keys() if isinstance(response, dict) else 'Not a dict'}")
+            return None
 
-        car_engine_displacement = str(response["spec"]["displacement"])
-        car_type = response["spec"]["bodyName"]
+        try:
+            car_title = f"{car_make} {car_model} {car_trim}"  # Заголовок
 
-        # Список фотографий (берем первые 10)
-        car_photos = [
-            generate_encar_photo_url(photo["path"]) for photo in response["photos"][:10]
-        ]
-        car_photos = [url for url in car_photos if url]
+            # Получаем все необходимые данные по автомобилю
+            car_price = str(response["advertisement"]["price"])
+            car_date = response["category"]["yearMonth"]
+            year = car_date[2:4]
+            month = car_date[4:]
+            car_year = year
+            car_month = month
 
-        # Дополнительные данные
-        vehicle_no = response["vehicleNo"]
-        vehicle_id = response["vehicleId"]
+            # Пробег (форматирование)
+            mileage = response["spec"]["mileage"]
+            formatted_mileage = f"{mileage:,} км"
 
-        # Форматируем
-        formatted_car_date = f"01{month}{year}"
-        formatted_car_type = "crossover" if car_type == "SUV" else "sedan"
+            # Тип КПП
+            transmission = response["spec"]["transmissionName"]
+            formatted_transmission = "Автомат" if "오토" in transmission else "Механика"
 
-        print_message(
-            f"ID: {car_id}\nType: {formatted_car_type}\nDate: {formatted_car_date}\nCar Engine Displacement: {car_engine_displacement}\nPrice: {car_price} KRW"
-        )
+            car_engine_displacement = str(response["spec"]["displacement"])
+            car_type = response["spec"]["bodyName"]
 
-        return [
-            car_price,
-            car_engine_displacement,
-            formatted_car_date,
-            car_title,
-            formatted_mileage,
-            formatted_transmission,
-            car_photos,
-            year,
-            month,
-        ]
+            # Список фотографий (берем первые 10)
+            car_photos = [
+                generate_encar_photo_url(photo["path"]) for photo in response["photos"][:10]
+            ]
+            car_photos = [url for url in car_photos if url]
+
+            # Дополнительные данные
+            vehicle_no = response["vehicleNo"]
+            vehicle_id = response["vehicleId"]
+
+            # Форматируем
+            formatted_car_date = f"01{month}{year}"
+            formatted_car_type = "crossover" if car_type == "SUV" else "sedan"
+
+            print_message(
+                f"ID: {car_id}\nType: {formatted_car_type}\nDate: {formatted_car_date}\nCar Engine Displacement: {car_engine_displacement}\nPrice: {car_price} KRW"
+            )
+
+            return [
+                car_price,
+                car_engine_displacement,
+                formatted_car_date,
+                car_title,
+                formatted_mileage,
+                formatted_transmission,
+                car_photos,
+                year,
+                month,
+            ]
+        except (KeyError, TypeError, IndexError) as e:
+            logging.error(f"Error extracting car data from Encar response: {e}")
+            return None
     elif "kbchachacha.com" in url:
         url = f"https://www.kbchachacha.com/public/car/detail.kbc?carSeq={car_id_external}"
 
@@ -1502,6 +1603,34 @@ def calculate_cost(link, message):
     # Если ссылка с encar
     if "fem.encar.com" in link:
         result = get_car_info(link)
+
+        # Check if API request failed
+        if result is None:
+            bot.delete_message(message.chat.id, processing_message.message_id)
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Попробовать ещё раз",
+                    callback_data="calculate_another",
+                )
+            )
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Связаться с менеджером", url="https://t.me/DeyTrading6"
+                )
+            )
+            bot.send_message(
+                message.chat.id,
+                "❌ Не удалось загрузить данные автомобиля с Encar.\n\n"
+                "Возможные причины:\n"
+                "• Автомобиль уже продан\n"
+                "• Временные проблемы с API\n"
+                "• Неверная ссылка\n\n"
+                "Пожалуйста, попробуйте другой автомобиль или свяжитесь с менеджером.",
+                reply_markup=keyboard,
+            )
+            return
+
         (
             car_price,
             car_engine_displacement,
@@ -1519,6 +1648,29 @@ def calculate_cost(link, message):
     # Если ссылка с kbchacha
     if "kbchachacha.com" in link:
         result = get_car_info(link)
+
+        # Check if parsing failed
+        if result is None:
+            bot.delete_message(message.chat.id, processing_message.message_id)
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Попробовать ещё раз",
+                    callback_data="calculate_another",
+                )
+            )
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Связаться с менеджером", url="https://t.me/DeyTrading6"
+                )
+            )
+            bot.send_message(
+                message.chat.id,
+                "❌ Не удалось загрузить данные автомобиля с KBChaCha.\n\n"
+                "Пожалуйста, попробуйте другой автомобиль или свяжитесь с менеджером.",
+                reply_markup=keyboard,
+            )
+            return
 
         car_title = result["name"]
 
@@ -1548,6 +1700,29 @@ def calculate_cost(link, message):
 
     if "web.chutcha.net" in link:
         result = get_car_info(link)
+
+        # Check if parsing failed
+        if result is None or isinstance(result, str):  # get_car_info returns error string for Chutcha
+            bot.delete_message(message.chat.id, processing_message.message_id)
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Попробовать ещё раз",
+                    callback_data="calculate_another",
+                )
+            )
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Связаться с менеджером", url="https://t.me/DeyTrading6"
+                )
+            )
+            bot.send_message(
+                message.chat.id,
+                "❌ Не удалось загрузить данные автомобиля с Chutcha.\n\n"
+                "Пожалуйста, попробуйте другой автомобиль или свяжитесь с менеджером.",
+                reply_markup=keyboard,
+            )
+            return
 
         car_title = result["name"]
 
@@ -1991,7 +2166,13 @@ def get_insurance_total():
             "Connection": "keep-alive",
         }
 
-        response = requests.get(url, headers)
+        response = requests.get(url, headers, timeout=10)
+
+        # Check status code before parsing
+        if response.status_code != 200:
+            logging.error(f"Encar insurance API returned status {response.status_code}")
+            return ["", ""]
+
         json_response = response.json()
 
         # Форматируем данные
@@ -2005,8 +2186,20 @@ def get_insurance_total():
 
         return [format_number(damage_to_my_car), format_number(damage_to_other_car)]
 
+    except requests.exceptions.Timeout:
+        logging.error("Timeout fetching insurance data from Encar")
+        return ["", ""]
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request error fetching insurance data: {e}")
+        return ["", ""]
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error for insurance data: {e}")
+        return ["", ""]
+    except (KeyError, TypeError) as e:
+        logging.error(f"Error parsing insurance data: {e}")
+        return ["", ""]
     except Exception as e:
-        print(f"Произошла ошибка при получении данных: {e}")
+        logging.error(f"Unexpected error in get_insurance_total: {e}")
         return ["", ""]
 
 
@@ -2023,8 +2216,13 @@ def get_technical_card():
             "Connection": "keep-alive",
         }
 
-        response = requests.get(url, headers=headers)
-        json_response = response.json() if response.status_code == 200 else None
+        response = requests.get(url, headers=headers, timeout=10)
+
+        if response.status_code != 200:
+            logging.error(f"Technical card API returned status {response.status_code}")
+            return "❌ Ошибка: не удалось получить данные. Проверьте ссылку."
+
+        json_response = response.json()
 
         if not json_response:
             return "❌ Ошибка: не удалось получить данные. Проверьте ссылку."
@@ -2125,8 +2323,21 @@ def get_technical_card():
 
         return output
 
+    except requests.exceptions.Timeout:
+        logging.error("Timeout fetching technical card from Encar")
+        return "❌ Ошибка: превышено время ожидания ответа от сервера."
     except requests.RequestException as e:
+        logging.error(f"Request error fetching technical card: {e}")
         return f"❌ Ошибка при получении данных: {e}"
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error for technical card: {e}")
+        return "❌ Ошибка: получен некорректный ответ от сервера."
+    except (KeyError, TypeError, AttributeError) as e:
+        logging.error(f"Error parsing technical card data: {e}")
+        return "❌ Ошибка: не удалось обработать данные о транспортном средстве."
+    except Exception as e:
+        logging.error(f"Unexpected error in get_technical_card: {e}")
+        return f"❌ Непредвиденная ошибка: {e}"
 
 
 # Callback query handler
