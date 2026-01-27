@@ -41,6 +41,7 @@ from utils import (
     calculate_age,
     format_number,
     get_customs_fees_manual,
+    get_panauto_car_data,
 )
 
 CALCULATE_CAR_TEXT = "Рассчитать Автомобиль (Encar, KBChaCha, ChutCha)"
@@ -84,6 +85,33 @@ usdt_to_krw_rate = 0
 pending_orders = {}
 user_contacts = {}
 user_names = {}
+
+# Хранение контекста для ввода мощности двигателя (HP)
+pending_hp_input = {}
+
+# Маппинг типов топлива для calcus.ru API
+# 1 = Бензиновый (Petrol)
+# 2 = Дизельный (Diesel)
+# 4 = Электрический (Electric)
+# 5 = Последовательный гибрид (Series Hybrid)
+# 6 = Параллельный гибрид (Parallel Hybrid)
+FUEL_TYPE_MAPPING = {
+    # Korean fuel names from Encar/KBChaCha APIs
+    "가솔린": 1,      # Gasoline
+    "휘발유": 1,      # Gasoline (alt)
+    "디젤": 2,        # Diesel
+    "경유": 2,        # Diesel (alt)
+    "LPG": 1,         # Treat as gasoline
+    "전기": 4,        # Electric
+    "하이브리드": 6,  # Hybrid (parallel)
+    "플러그인하이브리드": 6,  # Plug-in hybrid
+    # Russian translations (from pan-auto API fuelType field)
+    "Бензин": 1,
+    "Дизель": 2,
+    "Электро": 4,
+    "Гибрид": 6,
+}
+DEFAULT_FUEL_TYPE = 1  # Gasoline as default
 
 MANAGERS = [728438182, 627689711]
 
@@ -1558,6 +1586,12 @@ def calculate_cost(link, message):
     car_id = None
     car_title = ""
 
+    # Initialize pan-auto related variables (only used for Encar)
+    panauto_data = None
+    panauto_hp = None
+    panauto_fuel_type = DEFAULT_FUEL_TYPE
+    use_panauto_customs = False
+
     if "fem.encar.com" in link:
         car_id_match = re.findall(r"\d+", link)
         if car_id_match:
@@ -1616,6 +1650,9 @@ def calculate_cost(link, message):
 
     # Если ссылка с encar
     if "fem.encar.com" in link:
+        # First, try to get data from pan-auto API
+        panauto_data = get_panauto_car_data(car_id)
+
         result = get_car_info(link)
 
         # Check if API request failed
@@ -1658,6 +1695,58 @@ def calculate_cost(link, message):
         ) = result
 
         preview_link = f"https://fem.encar.com/cars/detail/{car_id}"
+
+        # Check if pan-auto has HP data
+        panauto_hp = None
+        panauto_fuel_type = DEFAULT_FUEL_TYPE
+        use_panauto_customs = False
+
+        if panauto_data:
+            panauto_hp = panauto_data.get("hp")
+            panauto_fuel_type_str = panauto_data.get("fuelType")
+            if panauto_fuel_type_str:
+                panauto_fuel_type = FUEL_TYPE_MAPPING.get(panauto_fuel_type_str, DEFAULT_FUEL_TYPE)
+
+            # Check if HP is valid and customs data is available
+            if panauto_hp and panauto_hp > 0:
+                costs_rub = panauto_data.get("costs", {}).get("RUB", {})
+                if costs_rub.get("clearanceCost") and costs_rub.get("customsDuty") and costs_rub.get("utilizationFee"):
+                    use_panauto_customs = True
+
+        # If HP is not available or invalid, ask user for HP
+        if not panauto_hp or panauto_hp <= 0:
+            bot.delete_message(message.chat.id, processing_message.message_id)
+
+            # Save context for HP input
+            car_engine_displacement_int = int(car_engine_displacement)
+            price_krw = int(car_price) * 10000
+            formatted_car_year = f"20{year}"
+
+            pending_hp_input[user_id] = {
+                "car_engine_displacement": car_engine_displacement_int,
+                "price_krw": price_krw,
+                "formatted_car_year": formatted_car_year,
+                "car_month": month,
+                "engine_type": panauto_fuel_type,
+                "car_title": car_title,
+                "formatted_mileage": formatted_mileage,
+                "formatted_transmission": formatted_transmission,
+                "car_photos": car_photos,
+                "year": year,
+                "month": month,
+                "preview_link": preview_link,
+                "link": link,
+                "car_id": car_id,
+            }
+
+            msg = bot.send_message(
+                message.chat.id,
+                f"🚗 {car_title}\n\n"
+                "Для расчёта таможенных платежей введите мощность двигателя (л.с.):\n"
+                "(Эту информацию можно найти в техническом паспорте автомобиля)",
+            )
+            bot.register_next_step_handler(msg, process_hp_input)
+            return
 
     # Если ссылка с kbchacha
     if "kbchachacha.com" in link:
@@ -1711,6 +1800,43 @@ def calculate_cost(link, message):
         preview_link = (
             f"https://www.kbchachacha.com/public/car/detail.kbc?carSeq={car_id}"
         )
+
+        # Get fuel type from KBChaCha data
+        car_fuel = result.get("fuel", "")
+        kbchacha_fuel_type = FUEL_TYPE_MAPPING.get(car_fuel, DEFAULT_FUEL_TYPE)
+
+        # KBChaCha doesn't provide HP, so we need to ask the user
+        bot.delete_message(message.chat.id, processing_message.message_id)
+
+        car_engine_displacement_int = int(car_engine_displacement) if car_engine_displacement else 0
+        price_krw = int(car_price) * 10000
+        formatted_car_year = f"20{car_year}"
+
+        pending_hp_input[user_id] = {
+            "car_engine_displacement": car_engine_displacement_int,
+            "price_krw": price_krw,
+            "formatted_car_year": formatted_car_year,
+            "car_month": car_month,
+            "engine_type": kbchacha_fuel_type,
+            "car_title": car_title,
+            "formatted_mileage": formatted_mileage,
+            "formatted_transmission": formatted_transmission,
+            "car_photos": car_photos,
+            "year": year,
+            "month": month,
+            "preview_link": preview_link,
+            "link": link,
+            "car_id": car_id,
+        }
+
+        msg = bot.send_message(
+            message.chat.id,
+            f"🚗 {car_title}\n\n"
+            "Для расчёта таможенных платежей введите мощность двигателя (л.с.):\n"
+            "(Эту информацию можно найти в техническом паспорте автомобиля)",
+        )
+        bot.register_next_step_handler(msg, process_hp_input)
+        return
 
     if "web.chutcha.net" in link:
         result = get_car_info(link)
@@ -1772,6 +1898,46 @@ def calculate_cost(link, message):
         own_car_insurance_payments = result["insurance_claims"]["own_damage_total"]
         other_car_insurance_payments = result["insurance_claims"]["other_damage_total"]
 
+        # Get fuel type from Chutcha data
+        car_fuel = result.get("fuel", "")
+        chutcha_fuel_type = FUEL_TYPE_MAPPING.get(car_fuel, DEFAULT_FUEL_TYPE)
+
+        # Chutcha doesn't provide HP, so we need to ask the user
+        bot.delete_message(message.chat.id, processing_message.message_id)
+
+        car_engine_displacement_int = int(car_engine_displacement) if car_engine_displacement else 0
+        # For Chutcha, car_price is already in KRW (plain_price)
+        price_krw = int(car_price) * 10000
+        formatted_car_year = f"20{year}"
+
+        pending_hp_input[user_id] = {
+            "car_engine_displacement": car_engine_displacement_int,
+            "price_krw": price_krw,
+            "formatted_car_year": formatted_car_year,
+            "car_month": month,
+            "engine_type": chutcha_fuel_type,
+            "car_title": car_title,
+            "formatted_mileage": formatted_mileage,
+            "formatted_transmission": formatted_transmission,
+            "car_photos": car_photos,
+            "year": year,
+            "month": month,
+            "preview_link": preview_link,
+            "link": link,
+            "car_id": car_id,
+            "own_car_insurance_payments": own_car_insurance_payments,
+            "other_car_insurance_payments": other_car_insurance_payments,
+        }
+
+        msg = bot.send_message(
+            message.chat.id,
+            f"🚗 {car_title}\n\n"
+            "Для расчёта таможенных платежей введите мощность двигателя (л.с.):\n"
+            "(Эту информацию можно найти в техническом паспорте автомобиля)",
+        )
+        bot.register_next_step_handler(msg, process_hp_input)
+        return
+
     if not car_price and car_engine_displacement and formatted_car_date:
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
@@ -1820,18 +1986,38 @@ def calculate_cost(link, message):
         print(int(formatted_car_year))
         print(car_month)
 
-        response = get_customs_fees(
-            car_engine_displacement,
-            price_krw,
-            int(formatted_car_year),
-            car_month,
-            engine_type=1,
-        )
+        # Check if we can use pan-auto pre-calculated customs values (Encar only)
+        if "fem.encar.com" in link and use_panauto_customs and panauto_data:
+            costs_rub = panauto_data.get("costs", {}).get("RUB", {})
+            customs_fee = int(costs_rub.get("clearanceCost", 0))
+            customs_duty = int(costs_rub.get("customsDuty", 0))
+            recycling_fee = int(costs_rub.get("utilizationFee", 0))
+            print(f"Using pan-auto customs: fee={customs_fee}, duty={customs_duty}, recycling={recycling_fee}")
+        else:
+            # Use calcus.ru API with HP from pan-auto (for Encar) or ask user (handled earlier)
+            hp_for_customs = panauto_hp if ("fem.encar.com" in link and panauto_hp) else 1
 
-        # Таможенный сбор
-        customs_fee = clean_number(response["sbor"])
-        customs_duty = clean_number(response["tax"])
-        recycling_fee = clean_number(response["util"])
+            response = get_customs_fees(
+                car_engine_displacement,
+                price_krw,
+                int(formatted_car_year),
+                car_month,
+                hp_for_customs,
+                engine_type=panauto_fuel_type if "fem.encar.com" in link else DEFAULT_FUEL_TYPE,
+            )
+
+            if response is None:
+                bot.delete_message(message.chat.id, processing_message.message_id)
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Не удалось рассчитать таможенные платежи. Попробуйте позже."
+                )
+                return
+
+            # Таможенный сбор
+            customs_fee = clean_number(response["sbor"])
+            customs_duty = clean_number(response["tax"])
+            recycling_fee = clean_number(response["util"])
 
         # Расчет итоговой стоимости автомобиля в рублях
         total_cost = (
@@ -2589,6 +2775,31 @@ def process_engine_volume(message):
     # Сохраняем объем двигателя
     user_data[message.chat.id]["engine_volume"] = int(user_input)
 
+    # Запрашиваем мощность двигателя
+    bot.send_message(
+        message.chat.id,
+        "Введите мощность двигателя в л.с. (например, 150):",
+    )
+    bot.register_next_step_handler(message, process_hp_manual)
+
+
+def process_hp_manual(message):
+    """Process HP input for manual calculation flow."""
+    user_input = message.text.strip()
+    user_id = message.chat.id
+
+    # Проверяем, что введено число
+    if not user_input.isdigit() or int(user_input) <= 0:
+        bot.send_message(
+            message.chat.id,
+            "Пожалуйста, введите корректную мощность двигателя в л.с. (положительное число):"
+        )
+        bot.register_next_step_handler(message, process_hp_manual)
+        return
+
+    # Сохраняем мощность двигателя
+    user_data[user_id]["engine_hp"] = int(user_input)
+
     # Запрашиваем стоимость авто
     bot.send_message(
         message.chat.id,
@@ -2627,7 +2838,7 @@ def process_car_price(message):
         user_data[user_id] = {}
 
     # Проверяем, есть ли нужные ключи
-    if "car_age" not in user_data[user_id] or "engine_volume" not in user_data[user_id]:
+    if "car_age" not in user_data[user_id] or "engine_volume" not in user_data[user_id] or "engine_hp" not in user_data[user_id]:
         bot.send_message(
             message.chat.id,
             "Произошла ошибка. Пожалуйста, начните расчёт заново, выбрав 'Ручной расчёт' из меню.",
@@ -2643,6 +2854,7 @@ def process_car_price(message):
 
     age_group = user_data[user_id]["car_age"]
     engine_volume = user_data[user_id]["engine_volume"]
+    engine_hp = user_data[user_id]["engine_hp"]
     car_price_krw = user_data[user_id]["car_price_krw"]
 
     # Конвертируем стоимость автомобиля в USD и RUB
@@ -2654,8 +2866,16 @@ def process_car_price(message):
         engine_volume,
         price_krw,
         age_group,
-        engine_type=1,
+        engine_hp,
+        engine_type=DEFAULT_FUEL_TYPE,
     )
+
+    if response is None:
+        bot.send_message(
+            message.chat.id,
+            "❌ Не удалось рассчитать таможенные платежи. Попробуйте позже."
+        )
+        return
 
     # Таможенный сбор
     customs_fee = clean_number(response["sbor"])
@@ -2861,7 +3081,8 @@ def process_car_price(message):
     result_message = (
         f"💰 <b>Расчёт стоимости автомобиля</b> 💰\n\n"
         f"📌 Возраст автомобиля: <b>{formatted_age_group}</b>\n"
-        f"🚗 Объём двигателя: <b>{format_number(engine_volume)} см³</b>\n\n"
+        f"🚗 Объём двигателя: <b>{format_number(engine_volume)} см³</b>\n"
+        f"🐴 Мощность: <b>{engine_hp} л.с.</b>\n\n"
         f"<i>ПЕРВАЯ ЧАСТЬ ОПЛАТЫ (КОРЕЯ)</i>:\n\n"
         f"Стоимость автомобиля:\n<b>${format_number(car_data['car_price_usd'])}</b> | <b>₩{format_number(car_data['car_price_krw'])}</b> | <b>{format_number(car_data['car_price_rub'])} ₽</b>\n\n"
         f"Услуги фирмы (поиск и подбор авто, документация, 2 осмотра):\n<b>$0</b> | <b>₩0</b> | <b>0 ₽</b>\n\n"
@@ -2905,6 +3126,431 @@ def process_car_price(message):
 
     # Очищаем данные пользователя после расчета
     del user_data[message.chat.id]
+
+
+def process_hp_input(message):
+    """
+    Process user-entered HP value and continue calculation for URL-based flows.
+    This handler is used when HP is not available from pan-auto API.
+    """
+    global car_data, pending_hp_input, usd_to_krw_rate, usd_to_rub_rate, usdt_to_krw_rate
+
+    user_id = message.chat.id
+    hp_input = message.text.strip()
+
+    # Validate HP is a number
+    if not hp_input.isdigit() or int(hp_input) <= 0:
+        bot.send_message(
+            user_id,
+            "Пожалуйста, введите корректное значение мощности (л.с.) - положительное целое число:"
+        )
+        bot.register_next_step_handler(message, process_hp_input)
+        return
+
+    hp = int(hp_input)
+
+    # Retrieve saved context
+    context = pending_hp_input.pop(user_id, None)
+    if not context:
+        bot.send_message(
+            user_id,
+            "Ошибка: данные расчёта утеряны. Пожалуйста, начните расчёт заново."
+        )
+        return
+
+    # Continue calculation with HP value
+    continue_calculation_with_hp(user_id, context, hp, message)
+
+
+def continue_calculation_with_hp(user_id, context, hp, message):
+    """
+    Resume calculation after user enters HP value.
+    Uses calcus.ru API with the provided HP value.
+    """
+    global car_data, usd_to_krw_rate, usd_to_rub_rate, usdt_to_krw_rate
+
+    # Extract data from context
+    car_engine_displacement = context["car_engine_displacement"]
+    price_krw = context["price_krw"]
+    formatted_car_year = context["formatted_car_year"]
+    car_month = context["car_month"]
+    engine_type = context.get("engine_type", DEFAULT_FUEL_TYPE)
+    car_title = context["car_title"]
+    formatted_mileage = context["formatted_mileage"]
+    formatted_transmission = context["formatted_transmission"]
+    car_photos = context["car_photos"]
+    year = context["year"]
+    month = context["month"]
+    preview_link = context["preview_link"]
+    link = context["link"]
+    car_id = context["car_id"]
+    processing_message_id = context.get("processing_message_id")
+
+    # Calculate prices
+    price_usd = price_krw / usd_to_krw_rate
+    price_rub = price_usd * usd_to_rub_rate
+
+    # Get customs fees from calcus.ru with HP
+    response = get_customs_fees(
+        car_engine_displacement,
+        price_krw,
+        int(formatted_car_year),
+        car_month,
+        hp,
+        engine_type=engine_type,
+    )
+
+    if response is None:
+        bot.send_message(
+            user_id,
+            "❌ Не удалось рассчитать таможенные платежи. Попробуйте позже."
+        )
+        return
+
+    # Таможенный сбор
+    customs_fee = clean_number(response["sbor"])
+    customs_duty = clean_number(response["tax"])
+    recycling_fee = clean_number(response["util"])
+
+    # Calculate age for display
+    age = calculate_age(int(formatted_car_year), car_month)
+    age_formatted = (
+        "до 3 лет"
+        if age == "0-3"
+        else (
+            "от 3 до 5 лет"
+            if age == "3-5"
+            else "от 5 до 7 лет" if age == "5-7" else "от 7 лет"
+        )
+    )
+
+    engine_volume_formatted = f"{format_number(car_engine_displacement)} cc"
+
+    # Расчет итоговой стоимости автомобиля в рублях
+    total_cost = (
+        price_rub
+        + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((300000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + 100000
+        + customs_fee
+        + customs_duty
+        + recycling_fee
+        + 13000
+        + 200000
+    )
+
+    total_cost_krw = (
+        price_krw
+        + 300000
+        + 440000
+        + (1400000 / usd_to_krw_rate)
+        + (100000 / usd_to_rub_rate) * usd_to_krw_rate
+        + (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
+        + (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
+        + (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
+        + (13000 / usd_to_rub_rate) * usd_to_krw_rate
+        + (200000 / usd_to_rub_rate) * usd_to_krw_rate
+    )
+
+    total_cost_usd = (
+        price_usd
+        + (1400000 / usd_to_krw_rate)
+        + (300000 / usd_to_krw_rate)
+        + (440000 / usd_to_krw_rate)
+        + (100000 / usd_to_rub_rate)
+        + (customs_fee / usd_to_rub_rate)
+        + (customs_duty / usd_to_rub_rate)
+        + (recycling_fee / usd_to_rub_rate)
+        + (13000 / usd_to_rub_rate)
+        + (200000 / usd_to_rub_rate)
+    )
+
+    # Update car_data with all calculated values
+    car_data["total_cost_usd"] = total_cost_usd
+    car_data["total_cost_krw"] = total_cost_krw
+    car_data["total_cost_rub"] = total_cost
+
+    car_data["company_fees_usd"] = 0
+    car_data["company_fees_krw"] = 0
+    car_data["company_fees_rub"] = 0
+
+    car_data["car_price_krw"] = price_krw
+    car_data["car_price_usd"] = price_usd
+    car_data["car_price_rub"] = price_rub
+
+    car_data["dealer_korea_usd"] = 440000 / usd_to_krw_rate
+    car_data["dealer_korea_krw"] = 440000
+    car_data["dealer_korea_rub"] = (440000 / usd_to_krw_rate) * usd_to_rub_rate
+
+    car_data["delivery_korea_usd"] = 100000 / usd_to_krw_rate
+    car_data["delivery_korea_krw"] = 100000
+    car_data["delivery_korea_rub"] = (100000 / usd_to_krw_rate) * usd_to_rub_rate
+
+    car_data["transfer_korea_usd"] = 350000 / usd_to_krw_rate
+    car_data["transfer_korea_krw"] = 350000
+    car_data["transfer_korea_rub"] = (350000 / usd_to_krw_rate) * usd_to_rub_rate
+
+    car_data["freight_korea_usd"] = 300000 / usd_to_krw_rate
+    car_data["freight_korea_krw"] = 300000
+    car_data["freight_korea_rub"] = (300000 / usd_to_krw_rate) * usd_to_rub_rate
+
+    car_data["korea_total_usd"] = (
+        (50000 / usd_to_rub_rate)
+        + (440000 / usd_to_krw_rate)
+        + (100000 / usd_to_krw_rate)
+        + (350000 / usd_to_krw_rate)
+        + (600)
+    )
+
+    car_data["korea_total_krw"] = (
+        ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + (440000)
+        + (100000)
+        + 350000
+        + (600 * usd_to_krw_rate)
+    )
+
+    car_data["korea_total_rub"] = (
+        (50000)
+        + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + (600 * usd_to_rub_rate)
+    )
+
+    car_data["korea_total_plus_car_usd"] = (
+        (50000 / usd_to_rub_rate)
+        + (price_usd)
+        + (440000 / usd_to_krw_rate)
+        + (100000 / usd_to_krw_rate)
+        + (350000 / usd_to_krw_rate)
+        + (600)
+    )
+    car_data["korea_total_plus_car_krw"] = (
+        ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + (price_krw)
+        + (440000)
+        + (100000)
+        + 350000
+        + (600 * usd_to_krw_rate)
+    )
+    car_data["korea_total_plus_car_rub"] = (
+        (50000)
+        + (price_rub)
+        + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + (600 * usd_to_rub_rate)
+    )
+
+    car_data["vladivostok_parom_krw"] = 1400000
+    car_data["vladivostok_parom_usd"] = 1400000 / usd_to_krw_rate
+    car_data["vladivostok_parom_rub"] = (
+        1400000 / usd_to_krw_rate
+    ) * usd_to_rub_rate
+
+    # Расходы Россия
+    car_data["customs_duty_usd"] = customs_duty / usd_to_rub_rate
+    car_data["customs_duty_krw"] = (
+        customs_duty / usd_to_rub_rate
+    ) * usd_to_krw_rate
+    car_data["customs_duty_rub"] = customs_duty
+
+    car_data["customs_fee_usd"] = customs_fee / usd_to_rub_rate
+    car_data["customs_fee_krw"] = (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["customs_fee_rub"] = customs_fee
+
+    car_data["util_fee_usd"] = recycling_fee / usd_to_rub_rate
+    car_data["util_fee_krw"] = (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["util_fee_rub"] = recycling_fee
+
+    car_data["broker_russia_usd"] = 100000 / usd_to_rub_rate
+    car_data["broker_russia_krw"] = (100000 / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["broker_russia_rub"] = 100000
+
+    car_data["moscow_transporter_usd"] = 200000 / usd_to_rub_rate
+    car_data["moscow_transporter_krw"] = (
+        200000 / usd_to_rub_rate
+    ) * usd_to_krw_rate
+    car_data["moscow_transporter_rub"] = 200000
+
+    car_data["vladivostok_transfer_usd"] = 13000 / usd_to_rub_rate
+    car_data["vladivostok_transfer_krw"] = (
+        13000 / usd_to_rub_rate
+    ) * usdt_to_krw_rate
+    car_data["vladivostok_transfer_rub"] = 13000
+
+    car_data["svh_russia_usd"] = 50000 / usd_to_rub_rate
+    car_data["svh_russia_krw"] = (50000 / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["svh_russia_rub"] = 50000
+
+    car_data["lab_russia_usd"] = 30000 / usd_to_rub_rate
+    car_data["lab_russia_krw"] = (30000 / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["lab_russia_rub"] = 30000
+
+    car_data["perm_registration_russia_usd"] = 8000 / usd_to_rub_rate
+    car_data["perm_registration_russia_krw"] = (
+        8000 / usd_to_rub_rate
+    ) * usd_to_krw_rate
+    car_data["perm_registration_russia_rub"] = 8000
+
+    car_data["russia_total_usd"] = (
+        (customs_duty / usd_to_rub_rate)
+        + (customs_fee / usd_to_rub_rate)
+        + (recycling_fee / usd_to_rub_rate)
+        + (346)
+        + (50000 / usd_to_rub_rate)
+        + (8000 / usd_to_rub_rate)
+    )
+    car_data["russia_total_krw"] = (
+        ((customs_duty / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((customs_fee / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((recycling_fee / usd_to_rub_rate) * usd_to_krw_rate)
+        + (346 * usd_to_krw_rate)
+        + ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((8000 / usd_to_rub_rate) * usd_to_krw_rate)
+    )
+    car_data["russia_total_rub"] = (
+        customs_duty
+        + customs_fee
+        + recycling_fee
+        + (346 * usd_to_rub_rate)
+        + 50000
+        + 8000
+    )
+
+    # Handle chutcha insurance payments
+    car_insurance_payments_chutcha = ""
+    if "web.chutcha.net" in link:
+        own_car_insurance_payments = context.get("own_car_insurance_payments")
+        other_car_insurance_payments = context.get("other_car_insurance_payments")
+        own_insurance_text = (
+            f"₩{format_number(own_car_insurance_payments)}"
+            if isinstance(own_car_insurance_payments, int)
+            else "Нет"
+        )
+        other_insurance_text = (
+            f"₩{format_number(other_car_insurance_payments)}"
+            if isinstance(other_car_insurance_payments, int)
+            else "Нет"
+        )
+
+        car_insurance_payments_chutcha = (
+            f"Страховые выплаты по данному автомобилю:\n{own_insurance_text}\n"
+            f"Страховые выплаты другому автомобилю:\n{other_insurance_text}\n\n"
+        )
+
+    # Формирование сообщения результата
+    result_message = (
+        f"{car_title}\n\n"
+        f"Возраст: {age_formatted} (дата регистрации: {month}/{year})\n"
+        f"Пробег: {formatted_mileage}\n"
+        f"Объём двигателя: {engine_volume_formatted}\n"
+        f"Мощность: {hp} л.с.\n"
+        f"КПП: {formatted_transmission}\n\n"
+        f"Стоимость автомобиля в Корее: ₩{format_number(price_krw)}\n"
+        f"Стоимость автомобиля под ключ до Владивостока: \n<b>${format_number(total_cost_usd)} </b> | <b>₩{format_number(total_cost_krw)} </b> | <b>{format_number(total_cost)} ₽</b>\n\n"
+        f"{car_insurance_payments_chutcha}"
+        f"💵 <b>Курс USDT к Воне: ₩{format_number(usdt_to_krw_rate)}</b>\n\n"
+        f"🔗 <a href='{preview_link}'>Ссылка на автомобиль</a>\n\n"
+        "Если данное авто попадает под санкции, пожалуйста уточните возможность отправки в вашу страну у наших менеджеров:\n\n"
+        f"▪️ +82-10-8855-0386 (Андрей)\n"
+        "🔗 <a href='https://t.me/dey_trading'>Официальный телеграм канал</a>\n"
+    )
+
+    # Клавиатура с дальнейшими действиями
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(
+        types.InlineKeyboardButton("Детали расчёта", callback_data="detail")
+    )
+
+    # Кнопка для добавления в избранное
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "⭐ Добавить в избранное",
+            callback_data=f"add_favorite_{car_id}",
+        )
+    )
+
+    if "fem.encar.com" in link:
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "Технический Отчёт об Автомобиле", callback_data="technical_card"
+            )
+        )
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "Выплаты по ДТП",
+                callback_data="technical_report",
+            )
+        )
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "Написать менеджеру", url="https://t.me/DeyTrading6"
+        )
+    )
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "Расчёт другого автомобиля",
+            callback_data="calculate_another",
+        )
+    )
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "Главное меню",
+            callback_data="main_menu",
+        )
+    )
+
+    # Отправляем до 10 фотографий
+    media_group = []
+    for photo_url in sorted(car_photos):
+        try:
+            response = requests.get(photo_url)
+            if response.status_code == 200:
+                photo = BytesIO(response.content)
+                media_group.append(types.InputMediaPhoto(photo))
+
+                if len(media_group) == 10:
+                    bot.send_media_group(user_id, media_group)
+                    media_group.clear()
+            else:
+                print(f"Ошибка загрузки фото: {photo_url} - {response.status_code}")
+        except Exception as e:
+            print(f"Ошибка при обработке фото {photo_url}: {e}")
+
+    # Отправка оставшихся фото, если их меньше 10
+    if media_group:
+        bot.send_media_group(user_id, media_group)
+
+    car_data["car_id"] = car_id
+    car_data["name"] = car_title
+    car_data["images"] = car_photos if isinstance(car_photos, list) else []
+    car_data["link"] = preview_link
+    car_data["year"] = year
+    car_data["month"] = month
+    car_data["mileage"] = formatted_mileage
+    car_data["engine_volume"] = car_engine_displacement
+    car_data["transmission"] = formatted_transmission
+    car_data["car_price"] = price_krw
+    car_data["user_name"] = message.from_user.username
+    car_data["first_name"] = message.from_user.first_name
+    car_data["last_name"] = message.from_user.last_name
+
+    bot.send_message(
+        user_id,
+        result_message,
+        parse_mode="HTML",
+        reply_markup=keyboard,
+    )
+
+    # Delete processing message if it exists
+    if processing_message_id:
+        try:
+            bot.delete_message(user_id, processing_message_id)
+        except Exception:
+            pass
 
 
 @bot.message_handler(func=lambda message: True)

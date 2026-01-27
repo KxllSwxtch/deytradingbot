@@ -3,6 +3,7 @@ import datetime
 import locale
 import time
 import random
+import logging
 
 PROXY_URL = "http://B01vby:GBno0x@45.118.250.2:8000"
 proxies = {"http": PROXY_URL, "https": PROXY_URL}
@@ -13,12 +14,13 @@ USER_AGENTS = [
 ]
 
 
-def get_customs_fees_manual(engine_volume, car_price, car_age, engine_type=1):
+def get_customs_fees_manual(engine_volume, car_price, car_age, power, engine_type=1):
     """
     Запрашивает расчёт таможенных платежей с сайта calcus.ru.
     :param engine_volume: Объём двигателя (куб. см)
     :param car_price: Цена авто в вонах
-    :param car_year: Год выпуска авто
+    :param car_age: Возрастная категория авто ("0-3", "3-5", "5-7", "7-0")
+    :param power: Мощность двигателя в лошадиных силах
     :param engine_type: Тип двигателя (1 - бензин, 2 - дизель, 3 - гибрид, 4 - электромобиль)
     :return: JSON с результатами расчёта
     """
@@ -28,7 +30,7 @@ def get_customs_fees_manual(engine_volume, car_price, car_age, engine_type=1):
         "owner": 1,  # Физлицо
         "age": car_age,  # Возрастная категория
         "engine": engine_type,  # Тип двигателя (по умолчанию 1 - бензин)
-        "power": 1,  # Лошадиные силы (можно оставить 1)
+        "power": int(power),  # Лошадиные силы
         "power_unit": 1,  # Тип мощности (1 - л.с.)
         "value": int(engine_volume),  # Объём двигателя
         "price": int(car_price),  # Цена авто в KRW
@@ -85,12 +87,14 @@ def calculate_age(year, month):
         return "7-0"
 
 
-def get_customs_fees(engine_volume, car_price, car_year, car_month, engine_type=1):
+def get_customs_fees(engine_volume, car_price, car_year, car_month, power, engine_type=1):
     """
     Запрашивает расчёт таможенных платежей с сайта calcus.ru.
     :param engine_volume: Объём двигателя (куб. см)
     :param car_price: Цена авто в вонах
     :param car_year: Год выпуска авто
+    :param car_month: Месяц выпуска авто
+    :param power: Мощность двигателя в лошадиных силах
     :param engine_type: Тип двигателя (1 - бензин, 2 - дизель, 3 - гибрид, 4 - электромобиль)
     :return: JSON с результатами расчёта
     """
@@ -100,7 +104,7 @@ def get_customs_fees(engine_volume, car_price, car_year, car_month, engine_type=
         "owner": 1,  # Физлицо
         "age": calculate_age(car_year, car_month),  # Возрастная категория
         "engine": engine_type,  # Тип двигателя (по умолчанию 1 - бензин)
-        "power": 1,  # Лошадиные силы (можно оставить 1)
+        "power": int(power),  # Лошадиные силы
         "power_unit": 1,  # Тип мощности (1 - л.с.)
         "value": int(engine_volume),  # Объём двигателя
         "price": int(car_price),  # Цена авто в KRW
@@ -140,3 +144,52 @@ def generate_encar_photo_url(photo_path):
     photo_url = f"{base_url}/{photo_path}"
 
     return photo_url
+
+
+def get_panauto_car_data(car_id):
+    """
+    Fetches car data from zefir.pan-auto.ru API.
+
+    :param car_id: Encar car ID
+    :return: dict with hp, customs values, fuel type, or None if not found
+    """
+    url = f"https://zefir.pan-auto.ru/api/cars/{car_id}/"
+
+    headers = {
+        "Accept": "*/*",
+        "User-Agent": random.choice(USER_AGENTS),
+        "Origin": "https://pan-auto.ru",
+        "Referer": "https://pan-auto.ru/",
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+
+        if response.status_code == 404:
+            logging.info(f"Car {car_id} not found in pan-auto database")
+            return None
+
+        if response.status_code != 200:
+            logging.error(f"Pan-auto API returned status {response.status_code}")
+            return None
+
+        data = response.json()
+
+        # Extract relevant data
+        result = {
+            "hp": data.get("hp"),
+            "fuelType": data.get("fuelType"),
+            "costs": data.get("costs", {}),
+        }
+
+        return result
+
+    except requests.exceptions.Timeout:
+        logging.error(f"Timeout while requesting pan-auto API for car_id: {car_id}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request error while fetching pan-auto data: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"JSON decode error or unexpected error in get_panauto_car_data: {e}")
+        return None
