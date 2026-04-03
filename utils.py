@@ -1,9 +1,10 @@
-import requests
 import datetime
 import locale
-import time
-import random
 import logging
+import random
+import time
+
+import requests
 
 PROXY_URL = "http://B01vby:GBno0x@45.118.250.2:8000"
 proxies = {"http": PROXY_URL, "https": PROXY_URL}
@@ -87,7 +88,9 @@ def calculate_age(year, month):
         return "7-0"
 
 
-def get_customs_fees(engine_volume, car_price, car_year, car_month, power, engine_type=1):
+def get_customs_fees(
+    engine_volume, car_price, car_year, car_month, power, engine_type=1
+):
     """
     Запрашивает расчёт таможенных платежей с сайта calcus.ru.
     :param engine_volume: Объём двигателя (куб. см)
@@ -153,7 +156,7 @@ def get_panauto_car_data(car_id):
     :param car_id: Encar car ID
     :return: dict with hp, customs values, fuel type, or None if not found
     """
-    url = f"https://zefir.pan-auto.ru/api/cars/{car_id}/"
+    url = f"https://zefir.pan-auto.ru/api/korea/{car_id}/"
 
     headers = {
         "Accept": "*/*",
@@ -191,5 +194,7 @@ def get_panauto_car_data(car_id):
         logging.error(f"Request error while fetching pan-auto data: {e}")
         return None
     except Exception as e:
-        logging.error(f"JSON decode error or unexpected error in get_panauto_car_data: {e}")
+        logging.error(
+            f"JSON decode error or unexpected error in get_panauto_car_data: {e}"
+        )
         return None

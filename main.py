@@ -1986,15 +1986,15 @@ def calculate_cost(link, message):
         print(int(formatted_car_year))
         print(car_month)
 
-        # Check if we can use pan-auto pre-calculated customs values (Encar only)
+        # Check if we can use other website pre-calculated customs values (Encar only)
         if "fem.encar.com" in link and use_panauto_customs and panauto_data:
             costs_rub = panauto_data.get("costs", {}).get("RUB", {})
             customs_fee = int(costs_rub.get("clearanceCost", 0))
             customs_duty = int(costs_rub.get("customsDuty", 0))
             recycling_fee = int(costs_rub.get("utilizationFee", 0))
-            print(f"Using pan-auto customs: fee={customs_fee}, duty={customs_duty}, recycling={recycling_fee}")
+            print(f"Using other website customs: fee={customs_fee}, duty={customs_duty}, recycling={recycling_fee}")
         else:
-            # Use calcus.ru API with HP from pan-auto (for Encar) or ask user (handled earlier)
+            # Use calcus.ru API with HP from other website (for Encar) or ask user (handled earlier)
             hp_for_customs = panauto_hp if ("fem.encar.com" in link and panauto_hp) else 1
 
             response = get_customs_fees(
